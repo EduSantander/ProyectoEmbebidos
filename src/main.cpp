@@ -49,7 +49,8 @@ int tailX[100], tailY[100]; // Colas del snake
 //Variables del jugador
 String username = "";
 int score = 0;
-int gameTime = 0;
+unsigned long startTime = 0; // Variable para almacenar el tiempo inicial
+unsigned long gameTime = 0;  // Variable para almacenar el tiempo transcurrido
 
 // Variables para el menú  POR REVISAR
 int gameOption = 0;  // 0 = Menu principal, 1 = Game Over
@@ -63,6 +64,25 @@ bool isInConfigName = true;
 
 int brightness = 50;  // Nivel de brillo inicial (0-255)
 int volume = 10;      // Nivel de volumen inicial (0-30)
+
+//----------------------------------------------------- **CONTROL DE TIEMPO** ---------------------------------------------------------//
+// Función para inicializar el temporizador al inicio del juego
+void startGameTimer() {
+  startTime = millis(); // Guardar el tiempo inicial
+}
+
+// Función para verificar y guardar el tiempo transcurrido al perder
+void checkTimeGameOver() {
+  if (isGameOver) {
+    // Calcular el tiempo transcurrido
+    gameTime = (millis() - startTime) / 1000; // Tiempo en segundos
+
+    delay(3000); // Pausa antes de reiniciar o salir (opcional)
+
+    // Reiniciar la bandera si es necesario
+    isGameOver = false;
+  }
+}
 
 //----------------------------------------------------- **CONTROL DFPLAYER MINI MP3** -----------------------------------------------------------//
 
