@@ -59,6 +59,7 @@ int configOption = 0; // 0 = Brillo, 1 = Volumen
 bool inMenu = true;
 bool isInConfigMenu = false; // Indicador de si estamos en el menú de configuración
 bool isInInfo = false;
+bool isInConfigName = true;
 
 int brightness = 50;  // Nivel de brillo inicial (0-255)
 int volume = 10;      // Nivel de volumen inicial (0-30)
@@ -399,6 +400,77 @@ void drawInfoScreen() {
     dma_display->print("Edu");
 }
 
+//--------------------------------------------------- **PANTALLA PARA NOMBRE** ---------------------------------------------------------//
+
+// Función para configurar el nombre
+void configureUsername() {
+  dma_display->clearScreen();
+  dma_display->setTextSize(1);
+  char currentChar = 'A'; // Letra inicial
+  int letterIndex = 0;    // Índice de la letra (0 a 3)
+  char tempUsername[5] = "AAAA"; // Temporal para mostrar el nombre en edición
+  bool isConfirming = false;
+
+  while (!isConfirming) {
+    dma_display->clearScreen();
+    dma_display->setCursor(5, 5);
+    dma_display->setTextColor(dma_display->color565(255, 255, 255)); // Blanco
+
+    // Mostrar el nombre en edición
+    dma_display->print("NAME: ");
+    dma_display->print(tempUsername);
+
+    // Mostrar instrucción
+    dma_display->setCursor(5, 20);
+    dma_display->print("EDIT: ");
+    dma_display->print(tempUsername[letterIndex]);
+
+    // Leer valores del joystick
+    int yValue = analogRead(Y1_pin);
+
+    // Cambiar letra con joystick hacia arriba/abajo
+    if (yValue < 1000) { // Joystick hacia arriba
+      currentChar++;
+      if (currentChar > 'Z') currentChar = 'A'; // Ciclo de A a Z
+    } else if (yValue > 3000) { // Joystick hacia abajo
+      currentChar--;
+      if (currentChar < 'A') currentChar = 'Z'; // Ciclo inverso
+    }
+
+    // Mostrar la letra actual en edición
+    dma_display->setCursor(5, 30);
+    dma_display->print("LETTER: ");
+    dma_display->print(currentChar);
+
+    // Comprobar si se pulsa el botón
+    if (digitalRead(SW_pin) == LOW) {
+      tempUsername[letterIndex] = currentChar; // Guardar letra seleccionada
+      letterIndex++; // Pasar a la siguiente letra
+      delay(300); // Debounce
+    }
+
+    // Confirmar cuando se hayan configurado las 4 letras
+    if (letterIndex >= 4) {
+      isConfirming = true;
+      tempUsername[4] = '\0'; // Asegurar el término de la cadena
+    }
+
+    delay(50); // Evitar lecturas repetitivas
+  }
+
+  // Guardar el nombre configurado en la variable global username
+  username = String(tempUsername);
+
+  // Mostrar mensaje de confirmación
+  dma_display->clearScreen();
+  dma_display->setCursor(5, 5);
+  dma_display->print("NAME SET!");
+  dma_display->setCursor(5, 20);
+  dma_display->print(username);
+  isInConfigName = false;
+  delay(2000);
+}
+
 //--------------------------------------------------- **SET UP** ---------------------------------------------------------//
 
 void setup(){
@@ -432,7 +504,6 @@ void setup(){
   Serial.println("DFPlayer Mini inicializado correctamente.");
   myDFPlayer.volume(volume);
   myDFPlayer.outputDevice(DFPLAYER_DEVICE_SD);
-  //myDFPlayer.loop(1); // Reproducir el archivo número 1 en bucle
 
   // Inicializar posición del snake
   tailX[0] = snakeX;
@@ -465,14 +536,17 @@ void loop(){
       isInInfo= false; // Salir de creditos
     }
   }else if (!isGameOver) {
-    setJoystickDirection();
-    changeSnakeDirection();
-    manageSnakeTailCoordinates();
-    manageEatenFood();
-    manageSnakeOutOfBounds();
-    manageGameOver();
-    drawGame();
-    delay(100);
+    if (isInConfigName) configureUsername();
+    else{
+      setJoystickDirection();
+      changeSnakeDirection();
+      manageSnakeTailCoordinates();
+      manageEatenFood();
+      manageSnakeOutOfBounds();
+      manageGameOver();
+      drawGame();
+      delay(100);
+    }
   } else {
     showGameOverScreen();
     inMenu = true;  // Volver al menú principal tras el "Game Over"
