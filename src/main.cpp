@@ -4,6 +4,9 @@
 #include <EEPROM.h>
 #include "DFRobotDFPlayerMini.h"
 #include <HardwareSerial.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 
 // Matriz Led 64x32 P4
 #define PANEL_RES_X 64      // Number of pixels wide of each INDIVIDUAL panel module. 
@@ -45,6 +48,7 @@ int snakeSize = 1;
 bool isGameOver = false;
 char direction = ' ';
 int tailX[100], tailY[100]; // Colas del snake
+int velocidad = 250;
 
 //Variables del jugador
 String username = "";
@@ -65,22 +69,29 @@ bool isInConfigName = true;
 int brightness = 50;  // Nivel de brillo inicial (0-255)
 int volume = 10;      // Nivel de volumen inicial (0-30)
 
+// URL de la API REST
+const char* serverUrl = "https://eduisant.pythonanywhere.com/snake/jugadores/"; // Cambia por tu endpoint
+const char* rootCACertificate = \
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIEVzCCAj+gAwIBAgIRAIOPbGPOsTmMYgZigxXJ/d4wDQYJKoZIhvcNAQELBQAwTzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2VhcmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMjQwMzEzMDAwMDAwWhcNMjcwMzEyMjM1OTU5WjAyMQswCQYDVQQGEwJVUzEWMBQGA1UEChMNTGV0J3MgRW5jcnlwdDELMAkGA1UEAxMCRTUwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAQNCzqKa2GOtu/cX1jnxkJFVKtj9mZhSAouWXW0gQI3ULc/FnncmOyhKJdyIBwsz9V8UiBOVHhbhBRrwJCuhezAUUE8Wod/Bk3U/mDR+mwt4X2VEIiiCFQPmRpM5uoKrNijgfgwgfUwDgYDVR0PAQH/BAQDAgGGMB0GA1UdJQQWMBQGCCsGAQUFBwMCBggrBgEFBQcDATASBgNVHRMBAf8ECDAGAQH/AgEAMB0GA1UdDgQWBBSfK1/PPCFPnQS37SssxMZwi9LXDTAfBgNVHSMEGDAWgBR5tFnme7bl5AFzgAiIyBpY9umbbjAyBggrBgEFBQcBAQQmMCQwIgYIKwYBBQUHMAKGFmh0dHA6Ly94MS5pLmxlbmNyLm9yZy8wEwYDVR0gBAwwCjAIBgZngQwBAgEwJwYDVR0fBCAwHjAcoBqgGIYWaHR0cDovL3gxLmMubGVuY3Iub3JnLzANBgkqhkiG9w0BAQsFAAOCAgEAH3KdNEVCQdqk0LKyuNImTKdRJY1C2uw2SJajuhqkyGPY8C+zzsufZ+mgnhnq1A2KVQOSykOEnUbx1cy637rBAihx97r+bcwbZM6sTDIaEriR/PLk6LKs9Be0uoVxgOKDcpG9svD33J+G9Lcfv1K9luDmSTgG6XNFIN5vfI5gs/lMPyojEMdIzK9blcl2/1vKxO8WGCcjvsQ1nJ/Pwt8LQZBfOFyVXP8ubAp/au3dc4EKWG9MO5zcx1qT9+NXRGdVWxGvmBFRAajciMfXME1ZuGmk3/GOkoAM7ZkjZmleyokP1LGzmfJcUd9s7eeu1/9/eg5XlXd/55GtYjAM+C4DG5i7eaNqcm2F+yxYIPt6cbbtYVNJCGfHWqHEQ4FYStUyFnv8sjyqU8ypgZaNJ9aVcWSICLOIE1/Qv/7oKsnZCWJ926wU6RqG1OYPGOi1zuABhLw61cuPVDT28nQS/e6z95cJXq0eK1BcaJ6fJZsmbjRgD5p3mvEf5vdQM7MCEvU0tHbsx2I5mHHJoABHb8KVBgWp/lcXGWiWaeOyB7RP+OfDtvi2OsapxXiV7vNVs7fMlrRjY1joKaqmmycnBvAq14AEbtyLsVfOS66B8apkeFX2NY4XPEYV4ZSCe8VHPrdrERk2wILG3T/EGmSIkCYVUMSnjmJdVQD9F6Na/+zmXCc=\n"
+    "-----END CERTIFICATE-----\n";
+
+WiFiClientSecure client;
+// Prototipo de la función
+void sendDataToAPI(String username, int score, unsigned long gameTime);
+
 //----------------------------------------------------- **CONTROL DE TIEMPO** ---------------------------------------------------------//
 // Función para inicializar el temporizador al inicio del juego
 void startGameTimer() {
   startTime = millis(); // Guardar el tiempo inicial
 }
-
 // Función para verificar y guardar el tiempo transcurrido al perder
 void checkTimeGameOver() {
   if (isGameOver) {
     // Calcular el tiempo transcurrido
     gameTime = (millis() - startTime) / 1000; // Tiempo en segundos
 
-    delay(3000); // Pausa antes de reiniciar o salir (opcional)
-
-    // Reiniciar la bandera si es necesario
-    isGameOver = false;
+    delay(100); // Pausa antes de reiniciar o salir (opcional)
   }
 }
 
@@ -142,6 +153,9 @@ void manageEatenFood() {
     score++;
     snakeSize++;
     setupFoodPosition();
+    if(velocidad > 50){
+      velocidad = velocidad - 10;
+    }
   }
 }
 
@@ -160,7 +174,7 @@ void drawGame() {
   }
 
   // Dibujar la comida
-  dma_display->drawPixel(foodX,foodY, dma_display->color565(0, 0, 255));
+  dma_display->drawPixel(foodX,foodY, dma_display->color565(255, 0, 0));
 
   // Dibujar el snake
   for (int i = 0; i < snakeSize; i++) {
@@ -217,19 +231,33 @@ void manageGameOver() {
 
 // Mostrar la pantalla de "Game Over"
 void showGameOverScreen() {
-  stopGameMusic(); // Detener la música al terminar
   dma_display->clearScreen();
   dma_display->fillRect(0, 0, PANEL_RES_X, PANEL_RES_Y, dma_display->color565(255, 0, 0)); // Fondo rojo
   delay(2000);
+  dma_display->clearScreen();
+  dma_display->setCursor(5,10);
+  dma_display->color565(0,255,0);
+  dma_display->print("Cargando...");
   // Resetear variables del juego
   snakeX = PANEL_RES_X / 2;
   snakeY = PANEL_RES_Y / 2;
   setupFoodPosition();
   direction = ' ';
   isGameOver = false;
+  isInConfigName = true;
+  checkTimeGameOver();
+  //Envío de datos a API
+  if (username.length() > 0 && score >= 0 && gameTime >= 0) {
+    sendDataToAPI(username, score, gameTime);
+  } else {
+    Serial.println("Datos inválidos. Intenta nuevamente.");
+  }
+  username = "";
   score = 0;
+  gameTime = 0;
   snakeSize = 1;
-  startGameMusic(1); // Reiniciar la música
+  velocidad = 250;
+  stopGameMusic();
 }
 
 //----------------------------------------------------- **PANTALLA MENU PRINCIPAL** -----------------------------------------------------------//
@@ -433,16 +461,21 @@ void configureUsername() {
 
   while (!isConfirming) {
     dma_display->clearScreen();
-    dma_display->setCursor(5, 5);
+    dma_display->setCursor(5, 2);
     dma_display->setTextColor(dma_display->color565(255, 255, 255)); // Blanco
 
     // Mostrar el nombre en edición
+    dma_display->setTextColor(dma_display->color565(255, 255, 0)); // Amarillo
     dma_display->print("NAME: ");
+    dma_display->setCursor(36, 2);
+    dma_display->setTextColor(dma_display->color565(255, 255, 255)); // Blanco
     dma_display->print(tempUsername);
 
     // Mostrar instrucción
-    dma_display->setCursor(5, 20);
+    dma_display->setCursor(5, 10);
+    dma_display->setTextColor(dma_display->color565(255, 255, 0)); // Amarillo
     dma_display->print("EDIT: ");
+    dma_display->setTextColor(dma_display->color565(255, 255, 255)); // Blanco
     dma_display->print(tempUsername[letterIndex]);
 
     // Leer valores del joystick
@@ -458,8 +491,10 @@ void configureUsername() {
     }
 
     // Mostrar la letra actual en edición
-    dma_display->setCursor(5, 30);
+    dma_display->setCursor(5, 22);
+    dma_display->setTextColor(dma_display->color565(255, 255, 0)); // Amarillo
     dma_display->print("LETTER: ");
+    dma_display->setTextColor(dma_display->color565(255, 255, 255)); // Blanco
     dma_display->print(currentChar);
 
     // Comprobar si se pulsa el botón
@@ -473,6 +508,7 @@ void configureUsername() {
     if (letterIndex >= 4) {
       isConfirming = true;
       tempUsername[4] = '\0'; // Asegurar el término de la cadena
+      startGameTimer();
     }
 
     delay(50); // Evitar lecturas repetitivas
@@ -489,6 +525,53 @@ void configureUsername() {
   dma_display->print(username);
   isInConfigName = false;
   delay(2000);
+}
+
+//--------------------------------------------------- **PETICIÓN POST** ---------------------------------------------------------//
+void sendDataToAPI(String username, int score, unsigned long gameTime) {
+  if (WiFi.status() == WL_CONNECTED) {
+    client.setCACert(rootCACertificate); // Configura el certificado
+    if (!client.connect("eduisant.pythonanywhere.com", 443)) {
+    Serial.println("Fallo al conectar con el servidor.");
+    return;
+    }
+
+    HTTPClient http;
+    http.begin(client, serverUrl);
+    http.addHeader("Content-Type", "application/json");
+
+    // Crear objeto JSON
+    StaticJsonDocument<200> jsonDoc; // Usar StaticJsonDocument sigue siendo válido aquí
+    jsonDoc["username"] = username;
+    jsonDoc["score"] = score;
+    jsonDoc["game_time"] = String(gameTime); // Convierte el tiempo en formato string
+
+    // Serializar el objeto JSON
+    String jsonString;
+    serializeJson(jsonDoc, jsonString);
+
+    // Mostrar los datos a enviar
+    Serial.println("Enviando los siguientes datos:");
+    Serial.println(jsonString);
+
+    // Enviar la solicitud POST
+    int httpResponseCode = http.POST(jsonString);
+
+    if (httpResponseCode > 0) {
+      Serial.print("Código de respuesta: ");
+      Serial.println(httpResponseCode);
+      String response = http.getString();
+      Serial.print("Respuesta del servidor: ");
+      Serial.println(response);
+    } else {
+      Serial.print("Error al enviar la solicitud: ");
+      Serial.println(http.errorToString(httpResponseCode));
+    }
+
+    http.end(); // Finaliza la conexión
+  } else {
+    Serial.println("WiFi desconectado. No se puede enviar la solicitud.");
+  }
 }
 
 //--------------------------------------------------- **SET UP** ---------------------------------------------------------//
@@ -534,8 +617,10 @@ void setup(){
 //--------------------------------------------------- **LOOP** ---------------------------------------------------------//
 
 void loop(){
+  stopGameMusic();
   loopAP();
   if (inMenu) {
+    startGameMusic(1);
     drawMenu();
     changeMenuOption();
     if ((digitalRead(SW_pin) == LOW) && (!isInConfigMenu) && (!isInInfo)){
@@ -558,14 +643,17 @@ void loop(){
   }else if (!isGameOver) {
     if (isInConfigName) configureUsername();
     else{
+      stopGameMusic();
+      startGameMusic(2);
       setJoystickDirection();
       changeSnakeDirection();
       manageSnakeTailCoordinates();
       manageEatenFood();
       manageSnakeOutOfBounds();
+      checkTimeGameOver();
       manageGameOver();
       drawGame();
-      delay(100);
+      delay(velocidad);
     }
   } else {
     showGameOverScreen();
