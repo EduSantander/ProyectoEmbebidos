@@ -81,6 +81,7 @@ bool isInConfigName = true;
 bool onePlayer = false;
 bool twoPlayers = false;
 bool isInChoosePlayer = false;
+bool inGame = false;
 
 int brightness = 80; // Nivel de brillo inicial (0-255)
 int volume = 15; // Nivel de volumen inicial (0-30)
@@ -936,6 +937,7 @@ void loop(){
     changeMenuOption();
     if ((isButtonPressed()) && (!isInConfigMenu) && (!isInInfo)){
       selectMenuOption();
+      inGame = true;
     }
   } else if (isInConfigMenu) {
     drawConfigMenu();
@@ -952,56 +954,62 @@ void loop(){
       inMenu = true; // Volver al menú principal
       isInInfo= false; // Salir de creditos
     }
-  }else if (isInChoosePlayer){
-    drawChoosePlayer();
-    changePlayerOption();
-    if (isButtonPressed()){
-      selectPlayerOption();
-      startGameTimer();
-    }
-  }else if(onePlayer){
-    if (!isGameOver) {
-      if (isInConfigName) configureUsername();
-      else{
-        setJoystickDirection();
-        changeSnakeDirection();
-        manageSnakeTailCoordinates();
-        manageEatenFood();
-        manageSnakeOutOfBounds();
-        checkTimeGameOver();
-        manageGameOver();
-        drawGame();
-        delay(velocidad);
+  }else if (inGame){
+    if (isInChoosePlayer){
+      drawChoosePlayer();
+      changePlayerOption();
+      if (isButtonPressed()){
+        selectPlayerOption();
+        startGameTimer();
       }
-    } else {
-      showGameOverScreen();
-      inMenu = true; // Volver al menú principal tras el "Game Over"
-    }
-  }else if (twoPlayers){
-    if (!isGameOver1 && !isGameOver2){
-      setJoystickDirection1();
-      setJoystickDirection2();
+    }else if(onePlayer){
+      if (!isGameOver) {
+        if (isInConfigName) configureUsername();
+        else{
+          setJoystickDirection();
+          changeSnakeDirection();
+          manageSnakeTailCoordinates();
+          manageEatenFood();
+          manageSnakeOutOfBounds();
+          checkTimeGameOver();
+          manageGameOver();
+          drawGame();
+          delay(velocidad);
+        }
+      } else {
+        showGameOverScreen();
+        inGame = false;
+        inMenu = true; // Volver al menú principal tras el "Game Over"
+        delay(1000);
+      }
+    }else if (twoPlayers){
+      if (!isGameOver1 && !isGameOver2){
+        setJoystickDirection1();
+        setJoystickDirection2();
 
-      changeSnakeDirection1();
-      changeSnakeDirection2();
+        changeSnakeDirection1();
+        changeSnakeDirection2();
 
-      manageSnakeTailCoordinates_2P(1);
-      manageSnakeTailCoordinates_2P(2);
+        manageSnakeTailCoordinates_2P(1);
+        manageSnakeTailCoordinates_2P(2);
 
-      manageEatenFood_2P(1);
-      manageEatenFood_2P(2);
+        manageEatenFood_2P(1);
+        manageEatenFood_2P(2);
 
-      manageSnakeOutOfBounds_2P(1);
-      manageSnakeOutOfBounds_2P(2);
+        manageSnakeOutOfBounds_2P(1);
+        manageSnakeOutOfBounds_2P(2);
 
-      checkScore();
-      manageGameOver_2P();
+        checkScore();
+        manageGameOver_2P();
 
-      drawGame_2P();
-      delay(velocidad_2P);
-    }else{
-      showGameOverScreen_2P();
-      inMenu = true;
+        drawGame_2P();
+        delay(velocidad_2P);
+      }else{
+        showGameOverScreen_2P();
+        inGame = false;
+        inMenu = true;
+        delay(1000);
+      }
     }
   }
 }
