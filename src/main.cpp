@@ -80,7 +80,7 @@ bool isInInfo = false;
 bool isInConfigName = true;
 bool onePlayer = false;
 bool twoPlayers = false;
-bool changePlayer = false;
+bool isInChoosePlayer = false;
 
 int brightness = 80; // Nivel de brillo inicial (0-255)
 int volume = 15; // Nivel de volumen inicial (0-30)
@@ -95,6 +95,17 @@ const char* rootCACertificate = \
 WiFiClientSecure client;
 // Prototipo de la función
 void sendDataToAPI(String username, int score, unsigned long gameTime);
+
+bool isButtonPressed() {
+    static unsigned long lastPressTime = 0;
+    unsigned long currentTime = millis();
+
+    if (digitalRead(SW_pin) == LOW && (currentTime - lastPressTime > 200)) {
+        lastPressTime = currentTime;
+        return true;
+    }
+    return false;
+}
 
 //----------------------------------------------------- **CONTROL DE TIEMPO** ---------------------------------------------------------//
 // Función para inicializar el temporizador al inicio del juego
@@ -114,11 +125,9 @@ void checkScore() {
   if ((millis() - startTime) > 60000) {
     if(score1>score2) {
       isGameOver2 = true;
-      isGameOver = true;
     } 
     else if (score1<score2) {
       isGameOver1 = true;
-      isGameOver = true;
     }
   }
 }
@@ -260,7 +269,6 @@ void manageGameOver() {
 void showGameOverScreen() {
   dma_display->clearScreen();
   dma_display->fillRect(0, 0, PANEL_RES_X, PANEL_RES_Y, dma_display->color565(255, 0, 0)); // Fondo rojo
-  delay(1000);
   checkTimeGameOver();
   // Resetear variables del juego
   snakeX = PANEL_RES_X / 2;
@@ -268,11 +276,9 @@ void showGameOverScreen() {
   setupFoodPosition();
   direction = ' ';
   isGameOver = false;
-  isGameOver1 = false;
-  isGameOver2 = false;
   isInConfigName = true;
   onePlayer = false;
-  twoPlayers = false;
+  isInChoosePlayer = true;
   //Envío de datos a API
   if (username.length() > 0 && score >= 0 && gameTime >= 0) {
     sendDataToAPI(username, score, gameTime);
@@ -469,6 +475,42 @@ void manageGameOver_2P() {
   }
 }
 
+void showGameOverScreen_2P(){
+  dma_display->clearScreen();
+  if (isGameOver1 && isGameOver2){
+    dma_display->setCursor(5, 10);
+    dma_display->setTextColor(dma_display->color565(255, 255, 255));
+    dma_display->setTextSize(1);
+    dma_display->print("DRAW!");
+  }else if (isGameOver1) {
+    dma_display->setCursor(5, 10);
+    dma_display->setTextColor(dma_display->color565(255, 255, 255));
+    dma_display->setTextSize(1);
+    dma_display->print("Player 1 Loses!");
+  }else if (isGameOver2) {
+    dma_display->setCursor(5, 10);
+    dma_display->setTextColor(dma_display->color565(255, 255, 255));
+    dma_display->setTextSize(1);
+    dma_display->print("Player 2 Loses!");
+  }
+  //Resetear las variables
+  snakeX1 = 15;
+  snakeX2 = 50;
+  snakeY1 = 10;
+  snakeY2 = 10;
+  setupFoodPosition1();
+  setupFoodPosition2();
+  direction1 = 'r';
+  direction2 = 'r';
+  twoPlayers = false;
+  isGameOver1 = false;
+  isGameOver2 = false;
+  isInChoosePlayer = true;
+  snakeSize1 = 1;
+  snakeSize2 = 1;
+  delay(1500);
+}
+
 //----------------------------------------------------- **PANTALLA MENU PRINCIPAL** -----------------------------------------------------------//
 
 // Función para dibujar el menú principal
@@ -536,6 +578,7 @@ void changeMenuOption() {
 void selectMenuOption() {
   if (menuOption == 0) {
     inMenu = false; // Iniciar juego
+    isInChoosePlayer = true; // Escoger jugadores
   }
   else if (menuOption == 1) {
     // Ir a configuración
@@ -707,7 +750,7 @@ void configureUsername() {
     dma_display->print(currentChar);
 
     // Comprobar si se pulsa el botón
-    if (digitalRead(SW_pin) == LOW) {
+    if (isButtonPressed()) {
       tempUsername[letterIndex] = currentChar; // Guardar letra seleccionada
       letterIndex++; // Pasar a la siguiente letra
       delay(300); // Debounce
@@ -769,25 +812,27 @@ void drawChoosePlayer(){
 void changePlayerOption() {
   int yValue = analogRead(Y1_pin);
 
-  if (yValue > 3000 && playerOption < 1) {
-    playerOption++; // Mover hacia derecha
+  if (yValue > 3000 && playerOption > 0) {
+    playerOption--; // Mover hacia izquierda
     delay(200); // Espera para evitar cambios rápidos
   }
-  if (yValue < 1000 && playerOption > 0) {
-    playerOption--; // Mover hacia izquierda
+  if (yValue < 1000 && playerOption < 1) {
+    playerOption++; // Mover hacia derecha
     delay(200); // Espera para evitar cambios rápidos
   }
 }
 
 // Función para seleccionar una opción
 void selectPlayerOption() {
-  if ((playerOption == 0) && (changePlayer)) {
+  if (playerOption == 0) {
     onePlayer = true;
     twoPlayers = false;
+    isInChoosePlayer = false;
   }
-  else if ((playerOption == 1) && (changePlayer)) {
+  else if (playerOption == 1) {
     onePlayer = false;
     twoPlayers = true;
+    isInChoosePlayer = false;
   }
 }
 
@@ -858,6 +903,8 @@ void setup(){
   dma_display->setBrightness8(brightness); //0-255
   dma_display->clearScreen();
   setupFoodPosition();
+  setupFoodPosition1();
+  setupFoodPosition2();
   pinMode(SW_pin, INPUT_PULLUP);
 
   //Configuracion para DFPlayer mini
@@ -878,8 +925,6 @@ void setup(){
   tailX[0] = snakeX;
   tailY[0] = snakeY;
   direction = ' '; // Comienza detenido
-
-  startGameTimer();
 };
 
 //--------------------------------------------------- **LOOP** ---------------------------------------------------------//
@@ -889,92 +934,74 @@ void loop(){
   if (inMenu) {
     drawMenu();
     changeMenuOption();
-    if ((digitalRead(SW_pin) == LOW) && (!isInConfigMenu) && (!isInInfo)){
+    if ((isButtonPressed()) && (!isInConfigMenu) && (!isInInfo)){
       selectMenuOption();
-  }
+    }
   } else if (isInConfigMenu) {
     drawConfigMenu();
     changeConfigOption();
     adjustConfigValue();
-    if (digitalRead(SW_pin) == LOW) {
+    if (isButtonPressed()) {
       inMenu = true; // Volver al menú principal
       isInConfigMenu = false; // Salir del menú de configuración
       delay(100);
     }
   } else if (isInInfo){
     drawInfoScreen();
-    if (digitalRead(SW_pin) == LOW) {
+    if (isButtonPressed()) {
       inMenu = true; // Volver al menú principal
       isInInfo= false; // Salir de creditos
     }
-  }else if (!isGameOver) {
-    if (!(onePlayer) && !(twoPlayers)){
-      drawChoosePlayer();
-      changePlayerOption();
-      if (digitalRead(SW_pin) == LOW){
-        selectPlayerOption();
-        changePlayer = true;
-        delay(200);
-      }
-    }else{
-      if (onePlayer){
-        if (isInConfigName) configureUsername();
-        else{
-          setJoystickDirection();
-          changeSnakeDirection();
-          manageSnakeTailCoordinates();
-          manageEatenFood();
-          manageSnakeOutOfBounds();
-          manageGameOver();
-          drawGame();
-          delay(velocidad);
-        }
-      }else if(twoPlayers){
-        if (!isGameOver1 && !isGameOver2) {
-          setJoystickDirection1();
-          setJoystickDirection2();
-
-          changeSnakeDirection1();
-          changeSnakeDirection2();
-
-          manageSnakeTailCoordinates_2P(1);
-          manageSnakeTailCoordinates_2P(2);
-
-          manageEatenFood_2P(1);
-          manageEatenFood_2P(2);
-
-          manageSnakeOutOfBounds_2P(1);
-          manageSnakeOutOfBounds_2P(2);
-
-          checkScore();
-          manageGameOver_2P();
-
-          drawGame();
-          delay(velocidad_2P);
-        } else {
-          dma_display->clearScreen();
-          if (isGameOver1 && isGameOver2){
-            dma_display->setCursor(5, 10);
-            dma_display->setTextColor(dma_display->color565(255, 255, 255));
-            dma_display->setTextSize(1);
-            dma_display->print("DRAW!");
-          }else if (isGameOver1) {
-            dma_display->setCursor(5, 10);
-            dma_display->setTextColor(dma_display->color565(255, 255, 255));
-            dma_display->setTextSize(1);
-            dma_display->print("Player 1 Loses!");
-          }else if (isGameOver2) {
-            dma_display->setCursor(5, 10);
-            dma_display->setTextColor(dma_display->color565(255, 255, 255));
-            dma_display->setTextSize(1);
-            dma_display->print("Player 2 Loses!");
-          }
-          while (true);
-        }
-      }
+  }else if (isInChoosePlayer){
+    drawChoosePlayer();
+    changePlayerOption();
+    if (isButtonPressed()){
+      selectPlayerOption();
+      startGameTimer();
     }
-  } else {
-    showGameOverScreen();
-    inMenu = true; // Volver al menú principal tras el "Game Over"
+  }else if(onePlayer){
+    if (!isGameOver) {
+      if (isInConfigName) configureUsername();
+      else{
+        setJoystickDirection();
+        changeSnakeDirection();
+        manageSnakeTailCoordinates();
+        manageEatenFood();
+        manageSnakeOutOfBounds();
+        checkTimeGameOver();
+        manageGameOver();
+        drawGame();
+        delay(velocidad);
+      }
+    } else {
+      showGameOverScreen();
+      inMenu = true; // Volver al menú principal tras el "Game Over"
+    }
+  }else if (twoPlayers){
+    if (!isGameOver1 && !isGameOver2){
+      setJoystickDirection1();
+      setJoystickDirection2();
+
+      changeSnakeDirection1();
+      changeSnakeDirection2();
+
+      manageSnakeTailCoordinates_2P(1);
+      manageSnakeTailCoordinates_2P(2);
+
+      manageEatenFood_2P(1);
+      manageEatenFood_2P(2);
+
+      manageSnakeOutOfBounds_2P(1);
+      manageSnakeOutOfBounds_2P(2);
+
+      checkScore();
+      manageGameOver_2P();
+
+      drawGame_2P();
+      delay(velocidad_2P);
+    }else{
+      showGameOverScreen_2P();
+      inMenu = true;
+    }
   }
 }
