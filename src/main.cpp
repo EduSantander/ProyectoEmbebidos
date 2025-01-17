@@ -666,18 +666,20 @@ void adjustConfigValue() {
   int yValue = analogRead(Y2_pin);
 
   if (configOption == 0) { // Ajustar brillo
-    if (yValue > 3000 && brightness < 255) {
+    if (yValue > 3000 && brightness <= 255) {
       brightness -= 5; // Decrementar brillo
-    } else if (yValue < 1000 && brightness > 0) {
+    } else if (yValue < 1000 && brightness >= 0) {
       brightness += 5; // Incrementar brillo
     }
+    brightness = constrain(brightness, 0, 255); // Limitar el brillo entre 0 y 255
     dma_display->setBrightness8(brightness); // Aplicar el brillo
   } else if (configOption == 1) { // Ajustar volumen
-    if (yValue > 3000 && volume < 30) {
+    if (yValue > 3000 && volume <= 30) {
       volume--; // Decrementar volumen
-    } else if (yValue < 1000 && volume > 0) {
+    } else if (yValue < 1000 && volume >= 0) {
       volume++; // Incrementar volumen
     }
+    volume = constrain(volume, 0, 30); // Limitar el volumen entre 0 y 30
     myDFPlayer.volume(volume); // Aplicar el volumen
   }
   delay(200); // Espera para evitar ajustes rápidos
